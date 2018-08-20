@@ -73,9 +73,16 @@ def humanizingDelay(maxLength, minLength=0.5):
 	
 def login(browser):
 
+	#conn = boto.connect_s3()
+	s3 = S3Connection(os.environ['NEOPETS_USERNAME'], os.environ['NEOPETS_PASSWORD'])
+	#print("connection: " + str(conn))
+	print("connection: " + str(s3))
+	#print("username: "+ str(os.environ['neopets_username']))
+	#print("password: "+ str(os.environ['neopets_password']))
 	#user credentials
-	userName = ""
-	passWord = ""
+	#userName = str(os.environ['neopets_username'])
+	#passWord = str(os.environ['neopets_password'])
+	return
 	
 	page = "http://www.neopets.com/login/index.phtml"
 	
