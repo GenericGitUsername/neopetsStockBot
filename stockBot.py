@@ -8,6 +8,7 @@ import sys
 import logging
 import re
 import os
+from boto.s3.connection import S3Connection
 
 
 logFile = open('log.txt', 'a')
@@ -90,6 +91,9 @@ def login(browser):
 	#passWord = str(os.environ['neopets_password'])
 	#return
 	"""
+	
+	userName = str(os.environ['neopets_username'])
+	passWord = str(os.environ['neopets_password'])
 
 	userName = ""
 	passWord = ""
