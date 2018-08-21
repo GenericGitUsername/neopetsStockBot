@@ -19,7 +19,7 @@ def main():
 	"""Main function controls browser session and logging into Neopets"""
 
 	logFile.write("\n")
-	logFile.write(str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + "\n")
+	logFile.write(str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))+"\n")
 
 	files = [
 			"bankPage.txt",
@@ -59,10 +59,6 @@ def main():
 	sellStockManager(br)
 	humanizingDelay(2)
 
-
-	# after successfully buying stocks, leave the days date as the active
-	# amount of neopoints. that way its easy to see if today has been
-	# purchased already. mm/dd
 	bankDeposit(br)
 	humanizingDelay(2)
 
@@ -182,9 +178,9 @@ def bankCollectInterest(browser):
 
 def bankDeposit(browser):
 	"""Looks at the current neopoint value and deposits any excess
-	after successfully buying stocks, leave the days date as the active
-	amount of neopoints. that way its easy to see if today has been
-	purchased already. mm/dd
+	after successfully buying stocks. Leave the days date as the active
+	amount of neopoints. that way its easy to see if today has made
+	purchases already. mm/dd
 	"""
 
 	page = "http://www.neopets.com/bank.phtml"
@@ -203,7 +199,10 @@ def bankDeposit(browser):
 		else:
 			break
 	else:
-		logFile.write(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")+" - An error occured while trying to access " + page + " \n")
+		logFile.write(
+					str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) +
+					" - An error occured while trying to access " +
+					str(page) + " \n")
 		return
 
 	humanizingDelay(3, minLength=1)
@@ -216,14 +215,16 @@ def bankDeposit(browser):
 		browser.form['amount'] = str(depositValue)
 		humanizingDelay(1)
 		browser.submit()
-		logFile.write(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")+" - " + str(depositValue) + " NP deposited to the bank.\n")
+		logFile.write(
+					str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) +
+					" - " + str(depositValue) + " NP deposited to the bank.\n")
 	elif currNeopoints < todayDate:
 		bankWithdrawal(browser)
 		bankDeposit(browser)
 
 
 def bankWithdrawal(browser):
-	"""decides if it is necessary to withdraw neopoints, 
+	"""decides if it is necessary to withdraw neopoints,
 	and then carries out that action.
 	"""
 
@@ -243,65 +244,48 @@ def bankWithdrawal(browser):
 		else:
 			break
 	else:
-		logFile.write(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")+" - An error occured while trying to access " + page + " \n")
+		logFile.write(
+					str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) +
+					" - An error occured while trying to access " + page + " \n")
 		return
 
+	humanizingDelay(5, minLength=2)
 
-	"""
-	## Display all the forms and related controls
-	formsList = list(browser.forms())
-	for i in range(1,3):
-		
-		currForm = formsList[i]
-		print("form " + str(i) + ": " + str(currForm))
-		print("	   attrs: " + str(currForm.attrs))
-		print("	   action: " + str(currForm.action))
-		print("	   method: " + str(currForm.method))
-		print("	   enctype: " + str(currForm.enctype))
-		print("	   name: " + str(currForm.name))
-		print("	   controls: " + str(currForm.controls))
-		
-		#selecting the controls by name doesn't work, so we get them by index
-		controlsList = currForm.controls
-		for j in range(len(controlsList)):
-		
-			currControl = controlsList[j]
-			print("control " + str(j) + ": " + str(currControl))
-			print("	   labels: " + str(currControl.get_labels()))
-			print("	   type: " + str(currControl.type))
-			print("	   name: " + str(currControl.name))
-			print("	   value: " + str(currControl.value))
-			print("	   disabled: " + str(currControl.disabled))
-			print("	   readonly: " + str(currControl.readonly))
-			print("	   id: " + str(currControl.id)) 
-			
-		print ""
-		print ""
-	""" 
-	
-	humanizingDelay(5, minLength=2) 
 	currNeopoints = getWalletNeopoints(bankHTMLString)
-	
-	#15000 for stocks, 100 for selling, 2000 for lottery, up to 1231 for date
-	withdrawThreshold = (17500 + int(datetime.datetime.now().strftime("%m%d"))) 
+
+	# 15000 for stocks, 100 for selling, 2000 for lottery, up to 1231 for date
+	withdrawThreshold = (17500 + int(datetime.datetime.now().strftime("%m%d")))
+
 	if currNeopoints < withdrawThreshold:
 		withdrawValue = withdrawThreshold - currNeopoints
-		
+
 		browser.select_form(nr=2)
-		
-		#For some reason these controls aren't detected as in the form, so we have to add them manually
-		browser.form.new_control(type="hidden", name="type", attrs={"value": "withdraw"})
-		browser.form.new_control(type="text", name="amount", attrs={"value": ""})
-		browser.form.new_control(type="submit", name=None, attrs={"value": "Withdraw"})
+
+		# For some reason these controls aren't detected as in the form, so we
+		# have to add them manually
+		browser.form.new_control(
+								type="hidden",
+								name="type",
+								attrs={"value": "withdraw"})
+		browser.form.new_control(
+								type="text",
+								name="amount",
+								attrs={"value": ""})
+		browser.form.new_control(
+								type="submit",
+								name=None,
+								attrs={"value": "Withdraw"})
 		browser.form.fixup()
-	
+
 		browser.select_form(nr=2)
-		browser.form['amount'] = str(withdrawValue) # amount
+		browser.form['amount'] = str(withdrawValue)
 		humanizingDelay(1)
 		browser.submit()
-		logFile.write(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")+" - " + str(withdrawValue) + " NP withdrawn from the bank.\n")
-	
-		
+		logFile.write(
+					str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) +
+					" - " + str(withdrawValue) + " NP withdrawn from the bank.\n")
+
+
 ##
 # Takes the current page's HTML as a string and returns the neopoint value.
 ##	   
