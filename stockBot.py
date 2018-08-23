@@ -59,8 +59,8 @@ def main():
 		buyStockManager(br)
 		humanizingDelay(2)
 
-		buyLotteryTickets(br)
-		humanizingDelay(2)	
+		#buyLotteryTickets(br)
+		#humanizingDelay(2)	
 	
 	sellStockManager(br)
 	humanizingDelay(2)	
