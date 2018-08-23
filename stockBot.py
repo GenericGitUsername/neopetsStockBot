@@ -1,4 +1,4 @@
-import mechanize
+import mechanicalsoup
 import random
 import datetime
 import time
@@ -14,6 +14,15 @@ from boto.s3.connection import S3Connection
 logFile = open('log.txt', 'a')
 outputFile = open('output1.txt', 'a')
 errorHTMLdump = open('errorHTML.txt', 'a')
+files = [
+		"loginPage.txt",
+		"interestBankPage.txt",
+		"withdrawalBankPage.txt",
+		"portfolioPage.txt",
+		"bargainPage.txt",
+		"buyPage.txt",
+		"depositBankPage.txt"]
+response = ""
 
 
 def main():
@@ -22,41 +31,39 @@ def main():
 	logFile.write("\n")
 	logFile.write(str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))+"\n")
 
-	files = [
-			"bankPage.txt",
-			"portfolioPage.txt",
-			"bargainPage.txt",
-			"buyPage.txt",
-			"loginPage.txt"]
-
 	for i in range(0, len(files)):
 		if os.path.exists(files[i]):
 			os.remove(files[i])
 
-	br = mechanize.Browser()
+	#br = mechanicalsoup.Browser()
 
 	# User-Agent
 	browserString = (
 					"Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.0.1)" +
 					" Gecko/2008071615 Fedora/3.0.1-1.fc9 Firefox/3.0.1")
-	br.addheaders = [('User-agent', browserString)]
+	#br.addheaders = [('User-agent', browserString)]
+	
+	br = mechanicalsoup.StatefulBrowser(
+										soup_config={'features': 'lxml'},  # Use the lxml HTML parser
+										raise_on_404=True,
+										user_agent=browserString)
 
-	login(br)
-	humanizingDelay(2)
-
-	neopoints = bankCollectInterest(br)
+	neopoints = login(br)
 	humanizingDelay(2)
 
 	if(neopoints != int(datetime.datetime.now().strftime("%m%d"))):
-		bankWithdrawal(br)
+		bankCollectInterest(br)
 		humanizingDelay(2)
 
+		bankWithdrawal(br)
+		humanizingDelay(2)
+		return
 		buyStockManager(br)
 		humanizingDelay(2)
 
 		buyLotteryTickets(br)
 		humanizingDelay(2)
-
+	return
 	sellStockManager(br)
 	humanizingDelay(2)
 
@@ -76,6 +83,29 @@ def humanizingDelay(maxLength, minLength=0.5):
 	pauseDuration = random.uniform(minLength, maxLength)
 	time.sleep(pauseDuration)
 
+	
+def openPage(browser, page, filename=""):
+	# For potential issues connecting, and a URLError is raised. This sleeps
+	# for 30 seconds then retries the connection up to 10 times before giving
+	# up and documenting the error.
+	for attempt in range(10):
+		try:
+			pageHTML = browser.open(page)
+			if(browser):
+				if(filename != ""):
+					with open(filename, encoding='utf-8', mode='w+') as f:
+						f.write(pageHTML.text)
+				return (browser, pageHTML)
+		except mechanicalsoup.LinkNotFoundError:
+			timer.sleep(5)
+		else:
+			break	
+	else:
+		logFile.write(
+					str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) +
+					" - An error occured while trying to access " + str(page) +
+					" \n")
+		return None
 
 def login(browser):
 	"""conn = boto.connect_s3()
@@ -92,92 +122,112 @@ def login(browser):
 	#return
 	"""
 	
-	userName = str(os.environ['neopets_username'])
-	passWord = str(os.environ['neopets_password'])
+	#userName = str(os.environ['neopets_username'])
+	#passWord = str(os.environ['neopets_password'])
+	credentials = []
+	with open("credentials.txt", "r") as credFile:
+		credentials = credFile.readlines()
 
-	userName = ""
-	passWord = ""
+	userName = str(credentials[0])
+	passWord = str(credentials[1])
 
 	page = "http://www.neopets.com/login/index.phtml"
+	filename = "loginPage.txt"
 
-	# For potential issues connecting, and a URLError is raised. This sleeps
-	# for 30 seconds then retries the connection up to 10 times before giving
-	# up and documenting the error.
-	for attempt in range(10):
-		try:
-			pageHTML = browser.open(page)
-			if(browser):
-				pageHTMLString = pageHTML.read()
-				with open("loginPage.txt", "w") as f:
-					f.write(pageHTMLString)
-				break
-		except mechanize.URLError:
-			time.sleep(5)
-		else:
-			break
-	else:
-		logFile.write(
-					str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) +
-					" - An error occured while trying to access " + str(page) +
-					" \n")
-		return
+	browser, pageHTML = openPage(browser, page, filename)
 
-	browser.select_form(action="/login.phtml")
+	browser.select_form('form[action="/login.phtml"]')
 	humanizingDelay(1)
-	browser.form['username'] = userName
+	browser['username'] = userName
 	humanizingDelay(2)
-	browser.form['password'] = passWord
+	browser['password'] = passWord
 	humanizingDelay(2)
+	
+	#browser.get_current_form().print_summary()
 
 	# Login
-	browser.submit()
+	response = browser.submit_selected()
+	neopoints = int(getWalletNeopoints(response.text))
+	return neopoints
 
 
 def bankCollectInterest(browser):
 	"""Collects the daily bank interest"""
 
 	page = "http://www.neopets.com/bank.phtml"
+	filename = "interestBankPage.txt"
 
-	# For potential issues connecting, and a URLError is raised. This sleeps
-	# for 30 seconds then retries the connection up to 10 times before giving
-	# up and documenting the error.
-	for attempt in range(10):
-		try:
-			bankHTML = browser.open(page)
-			if(browser):
-				bankHTMLString = bankHTML.read()
-				with open("bankPage.txt", "w") as f:
-					f.write(bankHTMLString)
-				break
-		except mechanize.URLError:
-			time.sleep(5)
-		else:
-			break
-	else:
-		logFile.write(
-					str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) +
-					" - An error occured while trying to access " + str(page) +
-					" \n")
-		return -1
+	browser, pageHTML = openPage(browser, page, filename)
+	form_candidates = pageHTML.soup.select("form")
 
-	browser.select_form(nr=3)
-	if("interest" in browser.form.get_value("type")):
-		collected = -1
-		matchobj = re.search(
-							r"Your current balance and interest rate allow" +
-							"you to gain <b>(\w*) NP<\/b>", bankHTMLString)
+	# The interest form disapears when its already been collected
+	if(len(form_candidates) < 7):
+		print("already collected interest today")
+		return
+
+	# Fragile: if they add more forms, this might break
+	browser.select_form(form_candidates[3])
+
+	# browser.get_current_form().print_summary()
+	collected = ""
+	submits = browser.get_current_page().find_all(type="submit")
+	for value in submits:
+		matchobj = re.search(r"(\d*) NP", str(value))
 		if(matchobj):
 			collected = matchobj.group(1)
+			break
 
-		humanizingDelay(3)
+	humanizingDelay(3)
 
-		# collect interest
-		browser.submit()
+	# collect interest
+	browser.submit_selected()
+	logFile.write(
+				str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) +
+				" - Collected " + str(collected) + " NP of interest \n")
+	return
+
+
+def bankWithdrawal(browser):
+	"""decides if it is necessary to withdraw neopoints,
+	and then carries out that action.
+	"""
+
+	page = "http://www.neopets.com/bank.phtml"
+	filename = "interestBankPage.txt"
+
+	browser, pageHTML = openPage(browser, page, filename)
+	form_candidates = pageHTML.soup.select("form")
+
+	humanizingDelay(1)
+	response = browser.refresh()
+	currNeopoints = int(getWalletNeopoints(response.text))	
+
+	# 15000 for stocks, 100 for selling, 2000 for lottery, up to 1231 for date
+	withdrawThreshold = (17500 + int(datetime.datetime.now().strftime("%m%d")))
+
+	if currNeopoints < withdrawThreshold:
+		humanizingDelay(5, minLength=2)
+		withdrawValue = withdrawThreshold - currNeopoints
+
+		# Fragile: if they add more forms, this might break
+		browser.select_form(form_candidates[2])
+
+		# For some reason these controls aren't detected as in the form, so we
+		# have to add them manually
+		browser.new_control(type="hidden", name="type", value="withdraw")
+		browser.new_control(type="text", name="amount", value="")
+		browser.new_control(type="submit", name=None, value="Withdraw")
+
+		# Fragile: if they add more forms, this might break
+		browser.select_form(form_candidates[2])
+
+		humanizingDelay(1)
+		browser['amount'] = str(withdrawValue)
+		humanizingDelay(1)
+		browser.submit_selected()
 		logFile.write(
 					str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) +
-					" - Collected " + str(collected) + " NP of interest \n")
-
-	return getWalletNeopoints(bankHTMLString)
+					" - " + str(withdrawValue) + " NP withdrawn from the bank.\n")
 
 
 def bankDeposit(browser):
@@ -188,30 +238,14 @@ def bankDeposit(browser):
 	"""
 
 	page = "http://www.neopets.com/bank.phtml"
+	filename = "interestBankPage.txt"
 
-	# For potential issues connecting, and a URLError is raised. This sleeps
-	# for 30 seconds then retries the connection up to 10 times before giving
-	# up and documenting the error.
-	for attempt in range(10):
-		try:
-			bankHTML = browser.open(page)
-			if(browser):
-				bankHTMLString = bankHTML.read()
-				break
-		except mechanize.URLError:
-			time.sleep(5)
-		else:
-			break
-	else:
-		logFile.write(
-					str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) +
-					" - An error occured while trying to access " +
-					str(page) + " \n")
-		return
+	browser, pageHTML = openPage(browser, page, filename)
+	pageHTMLString = pageHTML.read()
 
 	humanizingDelay(3, minLength=1)
 
-	currNeopoints = getWalletNeopoints(bankHTMLString)
+	currNeopoints = getWalletNeopoints(pageHTMLString)
 	todayDate = int(datetime.datetime.now().strftime("%m%d"))
 	if currNeopoints > todayDate:
 		depositValue = currNeopoints - todayDate
@@ -224,71 +258,7 @@ def bankDeposit(browser):
 					" - " + str(depositValue) + " NP deposited to the bank.\n")
 	elif currNeopoints < todayDate:
 		bankWithdrawal(browser)
-		bankDeposit(browser)
-
-
-def bankWithdrawal(browser):
-	"""decides if it is necessary to withdraw neopoints,
-	and then carries out that action.
-	"""
-
-	page = "http://www.neopets.com/bank.phtml"
-
-	# For potential issues connecting, and a URLError is raised. This sleeps
-	# for 30 seconds then retries the connection up to 10 times before giving
-	# up and documenting the error.
-	for attempt in range(10):
-		try:
-			bankHTML = browser.open(page)
-			if(browser):
-				bankHTMLString = bankHTML.read()
-				break
-		except mechanize.URLError:
-			time.sleep(5)
-		else:
-			break
-	else:
-		logFile.write(
-					str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) +
-					" - An error occured while trying to access " + page + " \n")
-		return
-
-	humanizingDelay(5, minLength=2)
-
-	currNeopoints = getWalletNeopoints(bankHTMLString)
-
-	# 15000 for stocks, 100 for selling, 2000 for lottery, up to 1231 for date
-	withdrawThreshold = (17500 + int(datetime.datetime.now().strftime("%m%d")))
-
-	if currNeopoints < withdrawThreshold:
-		withdrawValue = withdrawThreshold - currNeopoints
-
-		browser.select_form(nr=2)
-
-		# For some reason these controls aren't detected as in the form, so we
-		# have to add them manually
-		browser.form.new_control(
-								type="hidden",
-								name="type",
-								attrs={"value": "withdraw"})
-		browser.form.new_control(
-								type="text",
-								name="amount",
-								attrs={"value": ""})
-		browser.form.new_control(
-								type="submit",
-								name=None,
-								attrs={"value": "Withdraw"})
-		browser.form.fixup()
-
-		browser.select_form(nr=2)
-		browser.form['amount'] = str(withdrawValue)
-		humanizingDelay(1)
-		browser.submit()
-		logFile.write(
-					str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) +
-					" - " + str(withdrawValue) + " NP withdrawn from the bank.\n")
-
+		bankDeposit(browser)					
 
 ##
 # Takes the current page's HTML as a string and returns the neopoint value.
@@ -306,10 +276,10 @@ def getWalletNeopoints(pageHTMLString):
 ##
 # Takes the bank page's HTML as a string and returns the bank neopoint value.
 ##	
-def getBankNeopoints(bankHTMLString):
+def getBankNeopoints(pageHTMLString):
 	npValue = -1
 	
-	matchobj = re.search(r"<td align.*center.? style.*font-weight.? bold.*>(\w{1,3},?\w{0,3},?\w{0,3}) NP<.?td>", bankHTMLString)
+	matchobj = re.search(r"<td align.*center.? style.*font-weight.? bold.*>(\w{1,3},?\w{0,3},?\w{0,3}) NP<.?td>", pageHTMLString)
 	if(matchobj):
 		npString = matchobj.group(1)
 		npValue = int(npString.replace(",",""))
@@ -323,25 +293,11 @@ def getTotalNeopoints(browser):
 
 	page = "http://www.neopets.com/bank.phtml"
 	
-	# For potential issues connecting, and a URLError is raised. This sleeps
-	# for 30 seconds then retries the connection up to 10 times before giving
-	# up and documenting the error.
-	for attempt in range(10):
-		try:
-			bankHTML = browser.open(page)		
-			if(browser):					
-				bankHTMLString = bankHTML.read()
-				break
-		except mechanize.URLError:
-			time.sleep(5)
-		else:
-			break
-	else:
-		logFile.write(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")+" - An error occured while trying to access " + page + " \n")
-		return
+	browser, pageHTML = openPage(browser, page)
+	pageHTMLString = pageHTML.read()
 	
-	wallet = getWalletNeopoints(bankHTMLString)
-	bank = getBankNeopoints(bankHTMLString)
+	wallet = getWalletNeopoints(pageHTMLString)
+	bank = getBankNeopoints(pageHTMLString)
 	
 	return (wallet+bank)
 	
@@ -352,26 +308,10 @@ def getTotalNeopoints(browser):
 def getDetailedStockHoldings(browser):
 	
 	page = "http://www.neopets.com/stockmarket.phtml?type=portfolio"
-	
-	# For potential issues connecting, and a URLError is raised. This sleeps
-	# for 30 seconds then retries the connection up to 10 times before giving
-	# up and documenting the error.
-	for attempt in range(10):
-		try:
-			portfolioHTML = browser.open(page)	
-			if(browser):						
-				portfolioHTMLString = portfolioHTML.read()
-				with open("portfolioPage.txt", "w") as f:
-					f.write(portfolioHTMLString)
-				break
-		except mechanize.URLError:
-			time.sleep(5)
-		else:
-			break
-	else:
-		logFile.write(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")+" - An error occured while trying to access " + page + " \n")
-		return
-	
+
+	browser, portfolioHTML = openPage(browser, page)
+	portfolioHTMLString = portfolioHTML.read()
+
 	holdings = {}
 	
 	matchobj = re.findall(r"<tr>\s*<td align..center.>(\d?,?\d{1,3}).*\s*.*\s*.*\s*.*\s*.*\s*.*color..(\w*).><nobr>[+-]?(\d+[.]\d{2}).*\s*.*\[(\w{2,5})\]\[", portfolioHTMLString)
@@ -423,25 +363,9 @@ def getSimpleStockHoldings(browser):
 def getBargainStocks(browser):
 
 	page = "http://www.neopets.com/stockmarket.phtml?type=list&search=%&bargain=true"
-	
-	# For potential issues connecting, and a URLError is raised. This sleeps
-	# for 30 seconds then retries the connection up to 10 times before giving
-	# up and documenting the error.
-	for attempt in range(10):
-		try:
-			bargainHTML = browser.open(page)	
-			if(browser):						
-				bargainHTMLString = bargainHTML.read()
-				with open("portfolioPage.txt", "w") as f:
-					f.write(bargainHTMLString)
-				break
-		except mechanize.URLError:
-			time.sleep(5)
-		else:
-			break
-	else:
-		logFile.write(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")+" - An error occured while trying to access " + page + " \n")
-		return
+
+	browser, bargainHTML = openPage(browser, page)
+	bargainHTMLString = bargainHTML.read()
 	
 	bargains = {}
 	
@@ -548,25 +472,9 @@ def buyStockManager(browser):
 def buyStock(browser, ticker, shares):
 
 	page = "http://www.neopets.com/stockmarket.phtml?type=buy"
-	
-	# For potential issues connecting, and a URLError is raised. This sleeps
-	# for 30 seconds then retries the connection up to 10 times before giving
-	# up and documenting the error.
-	for attempt in range(10):
-		try:
-			buyStockHTML = browser.open(page)	
-			if(browser):						
-				buyStockHTMLString = buyStockHTML.read()
-				with open("portfolioPage.txt", "w") as f:
-					f.write(buyStockHTMLString)
-				break
-		except mechanize.URLError:
-			time.sleep(5)
-		else:
-			break
-	else:
-		logFile.write(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")+" - An error occured while trying to access " + page + " \n")
-		return
+
+	browser, buyStockHTML = openPage(browser, page)
+	buyStockHTMLString = buyStockHTML.read()
 	
 	#The form we want isn't named, but it's the second one on the page
 	browser.select_form(nr=1)
@@ -672,24 +580,9 @@ def sellStockManager(browser):
 		
 	
 	page = "http://www.neopets.com/stockmarket.phtml?type=portfolio"
-	
-	# For potential issues connecting, and a URLError is raised. This sleeps
-	# for 30 seconds then retries the connection up to 10 times before giving
-	# up and documenting the error.
-	for attempt in range(10):
-		try:
-			portfolioHTML = browser.open(page)	
-			if(browser):						
-				portfolioHTMLString = portfolioHTML.read()
-				break
-		except mechanize.URLError:
-			time.sleep(5)
-		else:
-			break
-	else:
-		logFile.write(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")+" - An error occured while trying to access " + page + " \n")
-		#return
-		
+
+	browser, portfolioHTML = openPage(browser, page)
+	portfolioHTMLString = portfolioHTML.read()	
 		
 	browser.select_form(nr=1)
 	currForm = browser.form 
@@ -781,8 +674,8 @@ def sellStockManager(browser):
 			f.write("	   readonly: " + str(currControl.readonly) + "\n")
 			f.write("	   id: " + str(currControl.id)+ "\n")
 			
-		print ""
-		print ""
+		print("")
+		print("")
 		f.write("\n")
 		f.write("\n")
 	
@@ -814,19 +707,7 @@ def buyLotteryTickets(browser):
 		sample = random.sample([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30], 6)
 		page = "http://www.neopets.com/games/process_lottery.phtml?one="+str(sample[0])+"&two="+str(sample[1])+"&three="+str(sample[2])+"&four="+str(sample[3])+"&five="+str(sample[4])+"&six="+str(sample[5])+"&"
 		
-		for attempt in range(10):
-			try:				
-				browser.open(page)
-				if(browser):				
-					humanizingDelay(2, 0.5)
-					break				
-			except mechanize.URLError:
-				time.sleep(5)
-			else:
-				pass
-		else:
-			logFile.write(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")+" - An error occured while trying to buy lottery tickets\n")
-			return
+		browser, lotteryHTML = openPage(browser, page)
 		
 	
 
