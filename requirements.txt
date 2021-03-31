@@ -7,7 +7,7 @@ chardet==3.0.4
 cryptography==2.3.1
 cryptography-vectors==2.3.1
 idna==2.7
-lxml==4.2.4
+lxml==4.6.3
 MechanicalSoup==0.10.0
 pycparser==2.18
 pyOpenSSL==18.0.0
